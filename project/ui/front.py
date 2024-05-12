@@ -1,24 +1,59 @@
-# front.py
+from PyQt5.QtWidgets import QMainWindow, QPushButton, QVBoxLayout, QWidget, QTextEdit, QApplication
+from PyQt5.QtCore import QThread, pyqtSignal, QObject
+import time
 
-import tkinter as tk
-from back import start_listening_thread, stop_listening_thread
 
-should_respond = False
+class Worker(QThread):
+    finished = pyqtSignal()
+    recording_stopped = pyqtSignal()
 
-def start_recording():
-    start_listening_thread()
+    def __init__(self, back_end):
+        super().__init__()
+        self.back_end = back_end
 
-def stop_recording():
-    stop_listening_thread()
+    def run(self):
+        self.back_end.start_recording()
+        self.finished.emit()
 
-root = tk.Tk()
-root.title("Speech Recognition")
+    def stop_recording(self):
+        self.back_end.stop_recording()
+        self.recording_stopped.emit()
 
-start_button = tk.Button(root, text="Start Recording", command=start_recording)
-start_button.pack(pady=10)
+class MainWindow(QMainWindow):
+    def __init__(self, back_end):
+        super().__init__()
 
-stop_button = tk.Button(root, text="Stop Recording", command=stop_recording)
-stop_button.pack(pady=10)
-stop_button.config(state=tk.DISABLED)
+        self.back_end = back_end
 
-root.mainloop()
+        self.setWindowTitle("Speech to Text App")
+
+        self.record_button = QPushButton("Record")
+        self.stop_button = QPushButton("Stop")
+        self.text_edit = QTextEdit()
+
+        layout = QVBoxLayout()
+        layout.addWidget(self.record_button)
+        layout.addWidget(self.stop_button)
+        layout.addWidget(self.text_edit)
+
+        widget = QWidget()
+        widget.setLayout(layout)
+        self.setCentralWidget(widget)
+
+        self.record_button.clicked.connect(self.start_recording)
+        self.stop_button.clicked.connect(self.stop_recording)
+
+        self.worker = Worker(self.back_end)
+        self.worker.finished.connect(self.display_text)
+        self.worker.recording_stopped.connect(self.stop_recording)
+
+    def stop_recording(self):
+        print("Front: Recording Stopped")
+
+    def start_recording(self):
+        print("Front: Record button clicked")  # Print statement for record button
+        self.worker.start()
+
+    def display_text(self):
+        text = self.back_end.stop_recording()
+        self.text_edit.setPlainText(text)
